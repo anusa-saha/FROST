@@ -8,6 +8,7 @@ It keeps the paper-aligned token shortlist decoder, uses K-FAC-only proxy scorin
 - `cli.py` - thin launcher so you can run `python cli.py ...`
 - `model_zoo.json` - model registry used by CLI keys
 - `requirements.txt` - runtime dependencies
+- `outputs/` - default location for decode/eval JSON and plots
 - `frost_modular/` - reusable package
 
 ## Install
@@ -31,6 +32,12 @@ You can edit `model_zoo.json` to add more teachers or proxy students without cha
 ## CLI Commands
 
 Run all commands from inside `frost-modular/`.
+
+All generated artifacts are written under `outputs/` by default:
+
+- `outputs/decode_result.json`
+- `outputs/gsm8k_frost_results.json`
+- `outputs/plots/`
 
 ### Decode one prompt
 
@@ -58,6 +65,16 @@ Useful arguments:
 - `--prompt-file`: read prompt text from a file
 - `--output-json`: optional JSON output path
 
+The decode JSON includes:
+
+- teacher output
+- FROST output
+- token shortlist diagnostics
+- step-level candidate energies
+- BLEU on the generated continuation against the teacher continuation
+- `frost_bleu_vs_teacher`
+- `frost_mean_running_bleu_vs_teacher`
+
 ### Evaluate on GSM8K
 
 ```powershell
@@ -68,8 +85,8 @@ Useful arguments:
 
 - `--eval-limit`: how many GSM8K rows to evaluate
 - `--beta-sweep`: optional list of beta values for a tradeoff curve
-- `--output-json`: choose the JSON path, default is `gsm8k_frost_results.json`
-- `--plot-dir`: where PNG graphs are written
+- `--output-json`: choose the JSON path, default is `outputs/gsm8k_frost_results.json`
+- `--plot-dir`: where PNG graphs are written, default is `outputs/plots`
 
 The evaluation JSON includes:
 
@@ -78,12 +95,13 @@ The evaluation JSON includes:
 - lengths
 - latencies
 - mean candidate energy
+- BLEU on the generated continuation against the teacher continuation
 - step-level diagnostic records
 
 ### Plot an existing results file
 
 ```powershell
-python cli.py plot --results-json gsm8k_frost_results.json --plot-dir plots
+python cli.py plot --results-json outputs/gsm8k_frost_results.json --plot-dir outputs/plots
 ```
 
 Generated plots:
@@ -93,6 +111,7 @@ Generated plots:
 - threshold sweep with F1
 - latency comparison
 - beta tradeoff curve when multiple beta values are present
+- BLEU similarity / beta tradeoff when BLEU data is present
 
 ## Related CLI Arguments
 
@@ -134,4 +153,5 @@ Plot-only:
 - K-FAC is used as a decode-time curvature approximation for proxy learnability.
 - Structural and provenance terms are present as stubs and default to zero.
 - The code is designed to match the logic of `FrostDecoding.ipynb` but in reusable modules.
-- The evaluation command writes `gsm8k_frost_results.json` by default unless you override `--output-json`.
+- The evaluation command writes `outputs/gsm8k_frost_results.json` by default unless you override `--output-json`.
+- The decode command writes `outputs/decode_result.json` by default unless you override `--output-json`.

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
+from math import exp, log
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
@@ -9,6 +11,7 @@ import numpy as np
 
 
 ANSWER_RE = re.compile(r"-?\d+(?:,\d{3})*(?:\.\d+)?")
+BLEU_TOKEN_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 
 
 def extract_number(text):
@@ -36,6 +39,63 @@ def gsm8k_correct(prediction, gold):
 
 def response_length(text, tokenizer):
     return len(tokenizer.encode(text, add_special_tokens=False))
+
+
+def strip_prompt_prefix(full_text, prompt):
+    if full_text is None:
+        return ""
+    text = str(full_text)
+    if prompt is None:
+        return text
+    prompt_text = str(prompt)
+    if prompt_text and text.startswith(prompt_text):
+        return text[len(prompt_text) :]
+    return text
+
+
+def bleu_tokenize(text):
+    if text is None:
+        return []
+    return BLEU_TOKEN_RE.findall(str(text).lower())
+
+
+def sentence_bleu_score(reference, hypothesis, max_order: int = 4, smooth: float = 1e-9):
+    reference_tokens = bleu_tokenize(reference)
+    hypothesis_tokens = bleu_tokenize(hypothesis)
+
+    if not reference_tokens or not hypothesis_tokens:
+        return 0.0
+
+    precisions = []
+    for order in range(1, max_order + 1):
+        ref_ngrams = Counter(
+            tuple(reference_tokens[i : i + order])
+            for i in range(max(len(reference_tokens) - order + 1, 0))
+        )
+        hyp_ngrams = Counter(
+            tuple(hypothesis_tokens[i : i + order])
+            for i in range(max(len(hypothesis_tokens) - order + 1, 0))
+        )
+        total = sum(hyp_ngrams.values())
+        if total == 0:
+            precisions.append(smooth)
+            continue
+        overlap = sum(min(count, ref_ngrams[ngram]) for ngram, count in hyp_ngrams.items())
+        precisions.append(max(overlap / total, smooth))
+
+    geo_mean = exp(sum(log(p) for p in precisions) / max_order)
+    ref_len = len(reference_tokens)
+    hyp_len = len(hypothesis_tokens)
+    if hyp_len == 0:
+        return 0.0
+    brevity_penalty = 1.0 if hyp_len > ref_len else exp(1.0 - (ref_len / max(hyp_len, 1)))
+    return float(brevity_penalty * geo_mean)
+
+
+def continuation_bleu_score(prompt, reference_text, hypothesis_text, max_order: int = 4, smooth: float = 1e-9):
+    reference_continuation = strip_prompt_prefix(reference_text, prompt).strip()
+    hypothesis_continuation = strip_prompt_prefix(hypothesis_text, prompt).strip()
+    return sentence_bleu_score(reference_continuation, hypothesis_continuation, max_order=max_order, smooth=smooth)
 
 
 def roc_curve_manual(y_true, y_score):
@@ -103,6 +163,7 @@ def summarize_results(rows):
     teacher_time = np.array([r["teacher_time_sec"] for r in rows], dtype=float)
     frost_time = np.array([r["frost_time_sec"] for r in rows], dtype=float)
     energy_score = -np.array([r["frost_mean_candidate_energy"] for r in rows], dtype=float)
+    bleu_values = np.array([r.get("frost_bleu_vs_teacher", np.nan) for r in rows], dtype=float)
 
     summary = {
         "teacher_accuracy": float(teacher_correct.mean()),
@@ -113,6 +174,10 @@ def summarize_results(rows):
         "frost_mean_latency_sec": float(frost_time.mean()),
         "mean_energy_score": float(energy_score.mean()),
     }
+    if np.isfinite(bleu_values).any():
+        summary["mean_frost_bleu_vs_teacher"] = float(np.nanmean(bleu_values))
+    else:
+        summary["mean_frost_bleu_vs_teacher"] = None
 
     roc = roc_curve_manual(frost_correct, energy_score)
     if roc is not None:
@@ -129,6 +194,7 @@ def summarize_results(rows):
 
 def save_results_json(rows, path) -> None:
     out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(rows, f, indent=2, ensure_ascii=False)
 

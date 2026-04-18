@@ -26,6 +26,7 @@ def plot_results(rows, output_dir="."):
     teacher_time = np.array([r["teacher_time_sec"] for r in rows], dtype=float)
     frost_time = np.array([r["frost_time_sec"] for r in rows], dtype=float)
     energy_score = -np.array([r["frost_mean_candidate_energy"] for r in rows], dtype=float)
+    bleu_values = np.array([r.get("frost_bleu_vs_teacher", np.nan) for r in rows], dtype=float)
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
@@ -118,6 +119,36 @@ def plot_results(rows, output_dir="."):
         plt.tight_layout()
         plt.savefig(output_dir / "frost_kfac_accuracy_length.png", dpi=200, bbox_inches="tight")
         plt.show()
+
+    if np.isfinite(bleu_values).any():
+        bleu_groups = {}
+        for row in rows:
+            value = row.get("frost_bleu_vs_teacher")
+            if value is None:
+                continue
+            bleu_groups.setdefault(row["beta"], []).append(float(value))
+
+        if len(bleu_groups) > 1:
+            betas = sorted(bleu_groups)
+            bleu_means = [float(np.mean(bleu_groups[b])) for b in betas]
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.plot(betas, bleu_means, marker="o", linewidth=2, color="#4daf4a")
+            ax.set_xlabel("Beta")
+            ax.set_ylabel("Mean BLEU vs teacher")
+            ax.set_ylim(0.0, 1.0)
+            ax.set_title("BLEU tradeoff curve")
+            plt.tight_layout()
+            plt.savefig(output_dir / "frost_kfac_bleu_tradeoff.png", dpi=200, bbox_inches="tight")
+            plt.show()
+        else:
+            fig, ax = plt.subplots(figsize=(7, 5))
+            ax.bar(["FROST"], [float(np.nanmean(bleu_values))], color="#4daf4a")
+            ax.set_ylabel("Mean BLEU vs teacher")
+            ax.set_ylim(0.0, 1.0)
+            ax.set_title("BLEU similarity")
+            plt.tight_layout()
+            plt.savefig(output_dir / "frost_kfac_bleu.png", dpi=200, bbox_inches="tight")
+            plt.show()
 
     print(json.dumps(summary, indent=2))
     return summary

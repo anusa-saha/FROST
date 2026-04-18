@@ -7,6 +7,12 @@ from pathlib import Path
 from .config import default_proxy_keys, default_teacher_key, load_model_zoo, resolve_model_spec
 from .data import calibration_pairs_from_examples, build_prompt, load_gsm8k_dataset
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs"
+DEFAULT_DECODE_OUTPUT = DEFAULT_OUTPUT_DIR / "decode_result.json"
+DEFAULT_EVAL_OUTPUT = DEFAULT_OUTPUT_DIR / "gsm8k_frost_results.json"
+DEFAULT_PLOT_DIR = DEFAULT_OUTPUT_DIR / "plots"
+
 
 def build_parser():
     parser = argparse.ArgumentParser(description="FROST modular CLI")
@@ -25,7 +31,7 @@ def build_parser():
     parser.add_argument("--kfac-layer-limit", type=int, default=16)
     parser.add_argument("--calibration-samples", type=int, default=8)
     parser.add_argument("--output-json", default=None, help="Where to write results JSON for decode/evaluate")
-    parser.add_argument("--plot-dir", default="plots", help="Directory for generated plots")
+    parser.add_argument("--plot-dir", default=str(DEFAULT_PLOT_DIR), help="Directory for generated plots")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     decode = subparsers.add_parser("decode", help="Run one defended decode")
@@ -122,20 +128,25 @@ def _decode_prompt(args, teacher_model, teacher_tokenizer, proxy_states):
         prompt,
         decode_config,
         sample=args.sample,
+        reference_text=teacher_out,
         return_stats=True,
     )
+    output_json = Path(args.output_json) if args.output_json else DEFAULT_DECODE_OUTPUT
     payload = {
         "prompt": prompt,
         "teacher": teacher_out,
         "frost": frost_out,
         "teacher_stats": teacher_stats,
         "frost_stats": frost_stats,
+        "frost_bleu_vs_teacher": float(frost_stats["final_bleu_vs_teacher"]) if frost_stats.get("final_bleu_vs_teacher") is not None else None,
+        "frost_mean_running_bleu_vs_teacher": float(frost_stats["mean_running_bleu_vs_teacher"]) if frost_stats.get("mean_running_bleu_vs_teacher") is not None else None,
         "beta": args.beta,
         "shortlist_k": args.shortlist_k,
     }
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    if args.output_json:
-        Path(args.output_json).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    output_json.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Saved results to {output_json}")
     return 0
 
 
@@ -167,7 +178,7 @@ def _evaluate(args, teacher_model, teacher_tokenizer, proxy_states):
         sample=args.sample,
     )
     print(json.dumps(summary, indent=2, ensure_ascii=False))
-    output_json = args.output_json or "gsm8k_frost_results.json"
+    output_json = Path(args.output_json) if args.output_json else DEFAULT_EVAL_OUTPUT
     save_evaluation_results(rows, output_json)
     print(f"Saved results to {output_json}")
     plot_results(rows, output_dir=args.plot_dir)
@@ -177,7 +188,7 @@ def _evaluate(args, teacher_model, teacher_tokenizer, proxy_states):
 def _plot(args):
     from .plots import plot_results
 
-    results_json = args.results_json or args.output_json or "gsm8k_frost_results.json"
+    results_json = args.results_json or args.output_json or DEFAULT_EVAL_OUTPUT
     rows = json.loads(Path(results_json).read_text(encoding="utf-8"))
     plot_results(rows, output_dir=args.plot_dir)
     return 0

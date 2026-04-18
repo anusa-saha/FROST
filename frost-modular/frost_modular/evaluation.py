@@ -63,6 +63,7 @@ def run_gsm8k_evaluation(
                 prompt,
                 beta_config,
                 sample=sample,
+                reference_text=teacher_out,
                 return_stats=True,
             )
 
@@ -81,6 +82,8 @@ def run_gsm8k_evaluation(
                 "frost_time_sec": float(frost_stats["elapsed_sec"]),
                 "frost_mean_candidate_energy": float(frost_stats["mean_candidate_energy"]),
                 "frost_mean_chosen_energy": float(frost_stats["mean_chosen_energy"]),
+                "frost_bleu_vs_teacher": float(frost_stats["final_bleu_vs_teacher"]) if frost_stats.get("final_bleu_vs_teacher") is not None else None,
+                "frost_mean_running_bleu_vs_teacher": float(frost_stats["mean_running_bleu_vs_teacher"]) if frost_stats.get("mean_running_bleu_vs_teacher") is not None else None,
                 "frost_num_steps": int(frost_stats["num_steps"]),
                 "frost_step_records": frost_stats["step_records"],
             }

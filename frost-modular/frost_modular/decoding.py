@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 from .kfac import ProxyKFACState, score_proxy_candidate
+from .metrics import continuation_bleu_score
 from .utils import model_device, move_batch_to_device
 
 
@@ -70,6 +71,7 @@ def frost_generate(
     prompt: str,
     config: DecodeConfig,
     sample: bool = False,
+    reference_text: Optional[str] = None,
     return_stats: bool = False,
 ):
     if not proxy_states:
@@ -158,6 +160,9 @@ def frost_generate(
 
         input_ids = torch.cat([input_ids, next_token.view(1, 1)], dim=1)
         decoded_text = teacher_tokenizer.decode(input_ids[0], skip_special_tokens=True)
+        running_bleu_vs_teacher = (
+            float(continuation_bleu_score(prompt, reference_text, decoded_text)) if reference_text is not None else None
+        )
 
         chosen_token_id = int(next_token.item())
         step_records.append(
@@ -173,6 +178,7 @@ def frost_generate(
                 "chosen_token_id": chosen_token_id,
                 "chosen_token_text": teacher_tokenizer.decode([chosen_token_id], skip_special_tokens=True),
                 "chosen_energy": float(candidate_geom[shortlist_choice]),
+                "running_bleu_vs_teacher": running_bleu_vs_teacher,
                 "step_time_sec": float(time.perf_counter() - step_start),
             }
         )
@@ -182,12 +188,15 @@ def frost_generate(
 
     elapsed = time.perf_counter() - start
     chosen_energies = [record["chosen_energy"] for record in step_records if record["chosen_energy"] is not None]
+    running_bleu_values = [record["running_bleu_vs_teacher"] for record in step_records if record["running_bleu_vs_teacher"] is not None]
     diagnostics = {
         "elapsed_sec": float(elapsed),
         "num_steps": int(len(step_records)),
         "mean_step_time_sec": float(np.mean([record["step_time_sec"] for record in step_records])) if step_records else 0.0,
         "mean_candidate_energy": float(np.mean([np.mean(record["candidate_geom"]) for record in step_records])) if step_records else 0.0,
         "mean_chosen_energy": float(np.mean(chosen_energies)) if chosen_energies else 0.0,
+        "final_bleu_vs_teacher": float(continuation_bleu_score(prompt, reference_text, decoded_text)) if reference_text is not None else None,
+        "mean_running_bleu_vs_teacher": float(np.mean(running_bleu_values)) if running_bleu_values else None,
         "step_records": step_records,
     }
     if return_stats:
