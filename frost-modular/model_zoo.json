@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "defaults": {
+    "teacher_key": "deepseek_r1_qwen7b",
+    "proxy_keys": [
+      "mistral_7b_instruct_v03"
+    ]
+  },
+  "models": {
+    "deepseek_r1_qwen7b": {
+      "role": "teacher",
+      "hf_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+      "dtype": "float16",
+      "device_map": "auto",
+      "trust_remote_code": false,
+      "notes": "Reasoning-oriented teacher used in the notebook."
+    },
+    "qwen2_5_7b_instruct": {
+      "role": "teacher",
+      "hf_id": "Qwen/Qwen2.5-7B-Instruct",
+      "dtype": "float16",
+      "device_map": "auto",
+      "trust_remote_code": false,
+      "notes": "General instruction-following teacher option."
+    },
+    "mistral_7b_instruct_v03": {
+      "role": "proxy",
+      "hf_id": "mistralai/Mistral-7B-Instruct-v0.3",
+      "dtype": "float16",
+      "device_map": "auto",
+      "trust_remote_code": false,
+      "notes": "Default proxy student used by the notebook."
+    },
+    "qwen2_5_3b_instruct": {
+      "role": "proxy",
+      "hf_id": "Qwen/Qwen2.5-3B-Instruct",
+      "dtype": "float16",
+      "device_map": "auto",
+      "trust_remote_code": false,
+      "notes": "Smaller proxy for cheaper calibration."
+    },
+    "llama3_1_8b_instruct": {
+      "role": "proxy",
+      "hf_id": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+      "dtype": "float16",
+      "device_map": "auto",
+      "trust_remote_code": false,
+      "notes": "Optional stronger proxy for multi-proxy scoring."
+    }
+  }
+}
